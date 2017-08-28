@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.3.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd">
+
+	<context:component-scan base-package="cn.zhang.springmvc"></context:component-scan>
+	
+	<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="prefix" value="/WEB-INF/views/"></property>
+		<property name="suffix" value=".jsp"></property>
+	</bean>
+	
+	<!--  
+		default-servlet-handler 将在SpringMVC的上下文中定义一个DefaultServletHttpRequestHandler
+		它会对进入 DispatcherHandler 的请求进行筛选  如果发现是没有经过映射的请求  就将该请求交给 WEB 应用服务器默认的Servlet进行处理
+		如果不是静态资源的请求  才交由  DispatcherServlet处理
+		一般 WEB 应用服务器默认的Servlet的名称都是 default
+		若所用的 WEB 应用服务器的默认 Servlet 名称不是default 则需要通过 default-servlet-name 属性显式指定
+	-->
+	<mvc:default-servlet-handler/>
+	
+	<!-- 上述的default-servlet-handler 也会导致 普通的映射请求  失效  所以需要配置一个 mvc:annotation-driven -->
+	<!-- 
+		配置了下面的配置信息之后  SpringMVC 会自动的向 IOC 容器中放入某些Bean
+		一般常用的属性是指定 conversion-service 来标识使用自定义的类型转换器
+		但是配置了该属性   如果对应的bean的类型不是  FormattingConversionServiceFactoryBean 
+		那么此时向WebDataBinder中放入的
+		conversionService 是一个  DefaultConversionService 对象
+		该对象不会自动的进行格式化   所以需要使用自定义的 conversion-service的时候就需要
+		使用 FormattingConversionServiceFactoryBean  而不是 ConversionServiceFactoryBean
+	-->
+	<mvc:annotation-driven conversion-service="conversionService"></mvc:annotation-driven>
+	
+	<!-- 
+		需要将自己的 converter 进行注册
+		同时需要将 conversionService 放入到 annotation-driven 的conversion-service 属性中
+	-->
+	<bean id="conversionService" 
+		class="org.springframework.format.support.FormattingConversionServiceFactoryBean">
+		<property name="converters">
+			<set>
+				<ref bean="springToEmployeeConverter"/>
+			</set>
+		</property>	
+	</bean>
+	
+	<!-- 配置国际化资源的bean -->
+	<bean id="messageSource"
+		class="org.springframework.context.support.ResourceBundleMessageSource">
+		<property name="basename" value="i18n"></property>	
+	</bean>
+	
+	<!-- <mvc:view-controller path="/i18n" view-name="i18n"/> -->
+	<mvc:view-controller path="/i18n2" view-name="i18n2"/>
+	
+	<!-- 想要使用通过超链接的方式去切换 中英文  而不是根据浏览器语言的不同来切换  首先需要配置 SessionLocaleResolver -->
+	<bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver"></bean>
+	
+	<!-- 
+		当有多个拦截器进行请求的拦截的时候   拦截的顺序为: 
+		如果各个拦截器的PreHandle 方法都是true的返回
+			1Pre - 2Pre .. - nPre - 目标方法执行 - nPost .. - 2Post - 1Post - DispatcherServlet的render执行 - nCompl .. - 2Compl - 1Compl
+		如果有其中的一个拦截器PreHandle 方法返回了false
+		那么后面的执行结果就变为了
+			1Pre - 2Pre返回false - 1Compl
+			可以看到  将会帮变为执行指定拦截器的PreHandle 方法   跳过目标方法和各个拦截器的PostHandle方法  最后执行第一个返回false的拦截器之前的拦截器的afterComplete方法
+	-->
+	<mvc:interceptors>
+		<!-- 配置自定义的拦截器 -->
+		<bean class="cn.zhang.springmvc.interceptors.FirstInterceptor"></bean>
+		<!-- 还需要配置一个 LocaleChangeInterceptor 拦截器 -->
+		<bean class="org.springframework.web.servlet.i18n.LocaleChangeInterceptor"></bean>
+		<!-- 可以对拦截器本身进行配置  就可以指定该拦截器拦截(或不拦截)哪些映射[可以配置多个] -->
+		<!-- 
+			注: 在该配置中  配置是有顺序的
+			mvc:mapping - mvc:exclude-mapping - bean,ref
+			bean 和 ref 这两者配置只能存在一个
+		-->
+		<mvc:interceptor>
+			<mvc:mapping path="/emps"/> <!-- 配置拦截哪个映射 -->
+			<!-- <mvc:exclude-mapping path="/emp"/> --> <!-- 配置不拦截哪个映射 -->
+			<bean class="cn.zhang.springmvc.interceptors.SecondInterceptor"></bean>
+			<!-- <ref bean="messageSource"/> -->
+		</mvc:interceptor>
+	</mvc:interceptors>
+
+	<!-- 配置用于文件上传的 bean -->
+	<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<property name="defaultEncoding" value="UTF-8"></property>
+		<property name="maxUploadSize" value="102400"></property>
+	</bean>
+	
+	<!-- 配置 SimpleMappingExceptionResolver 异常解析器 -->
+	<bean class="org.springframework.web.servlet.handler.SimpleMappingExceptionResolver">
+		<property name="exceptionMappings">
+			<props>
+				<!-- key 执行 异常的全类名   后面指定发生执行异常 转发到的页面 -->
+				<prop key="java.lang.ArrayIndexOutOfBoundsException">error</prop>
+			</props>
+		</property>
+	</bean>
+
+</beans>
